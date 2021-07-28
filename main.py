@@ -42,6 +42,7 @@ class Game_Board:
         self.piece_types = PIECES_TYPE
         self.pressed_cell = None
         self.picked_piece = None
+        self.dragged_piece = None
         self.load_background()
         self.draw_board()
         self.draw_pieces()
@@ -118,7 +119,7 @@ class Game_Board:
         for piece in self.all_pieces:
             for cell in self.all_cells:
                 if piece.field_name == cell.field_name:
-                    piece.rect = cell.rect
+                    piece.rect = cell.rect.copy()
 
     def create_piece(self, piece_symbol, table_coord):
         field_name = self.to_field_name(table_coord)
@@ -137,12 +138,30 @@ class Game_Board:
 
     def btn_down(self, position):
         self.pressed_cell = self.get_cell(position)
+        self.dragged_piece = self.get_piece_on_cell(self.pressed_cell)
+        if self.dragged_piece is not None:
+            self.dragged_piece.rect.center = position
+            self.update_all()
 
     def btn_up(self, position):
         released_cell = self.get_cell(position)
         if (released_cell is not None) and (released_cell == self.pressed_cell):
             self.pick_cell(released_cell)
+        if self.dragged_piece is not None:
+            self.dragged_piece.move_to_cell(released_cell)
+            self.dragged_piece = None
         self.update_all()
+
+    def get_piece_on_cell(self, cell):
+        for piece in self.all_pieces:
+            if piece.field_name == cell.field_name:
+                return piece
+        return None
+
+    def drag(self, position):
+        if self.dragged_piece is not None:
+            self.dragged_piece.rect.center = position
+            self.update_all()
 
     def update_all(self):
         self.all_cells.draw(self.screen)
@@ -153,15 +172,13 @@ class Game_Board:
     def pick_cell(self, cell):
         self.unmark_cell(cell)
         if self.picked_piece is None:
-            for piece in self.all_pieces:
-                if piece.field_name == cell.field_name:
-                    pick = Area(cell)
-                    self.all_areas.add(pick)
-                    self.picked_piece = piece
-                    break
+            piece = self.get_piece_on_cell(cell)
+            if piece is not None:
+                pick = Area(cell)
+                self.all_areas.add(pick)
+                self.picked_piece = piece
         else:
-            self.picked_piece.rect = cell.rect
-            self.picked_piece.field_name = cell.field_name
+            self.picked_piece.move_to_cell(cell)
             moved = Area(cell)
             self.all_areas.add(moved)
             self.picked_piece = None
@@ -201,6 +218,10 @@ class Piece(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.color = color
         self.field_name = field_name
+
+    def move_to_cell(self, cell):
+        self.rect = cell.rect.copy()
+        self.field_name = cell.field_name
 
 
 class King(Piece):
@@ -246,6 +267,9 @@ while is_running:
 
         if event.type == pygame.MOUSEBUTTONUP:
             chessboard.btn_up(event.pos)
+
+        if event.type == pygame.MOUSEMOTION:
+            chessboard.drag(event.pos)
     clock.tick(FPS)
 
 pygame.quit()
